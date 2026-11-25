@@ -47,9 +47,14 @@ def get_order(data):
             order.append(m)
     return order
 
-def refresh():
+def refresh(updates=None):
     if os.path.exists(RAINMETER):
-        subprocess.run([RAINMETER, "!Refresh", r"StormPulse\Panel"], check=False)
+        if updates:
+            for k, v in updates.items():
+                subprocess.run([RAINMETER, "!SetVariable", k, str(v), r"StormPulse\Panel"], check=False)
+            subprocess.run([RAINMETER, "!CommandMeasure", "MeasureLayout", "ApplyLive()", r"StormPulse\Panel"], check=False)
+        else:
+            subprocess.run([RAINMETER, "!Refresh", r"StormPulse\Panel"], check=False)
         subprocess.run([RAINMETER, "!Refresh", r"StormPulse\Settings"], check=False)
 
 def main():
@@ -71,7 +76,7 @@ def main():
             return
         new_val = "0" if cur == "1" else "1"
         write_vars({key: new_val})
-        refresh()
+        refresh({key: new_val})
 
     elif action == "move" and len(sys.argv) >= 4:
         arg = sys.argv[2]
@@ -86,7 +91,7 @@ def main():
             for i, m in enumerate(order):
                 updates[f"Slot{i}"] = m
             write_vars(updates)
-            refresh()
+            refresh({"ModOrder": updates["ModOrder"]})
 
 if __name__ == "__main__":
     main()

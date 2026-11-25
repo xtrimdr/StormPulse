@@ -141,6 +141,11 @@ function ApplyLayout()
 
     local info = MODS[mod]
     SKIN:Bang("!ShowMeterGroup", "Mod" .. mod)
+    if mod == "CPU" then
+      local st = tonumber(SKIN:GetVariable("ShowTemps")) or 1
+      if st == 1 then SKIN:Bang("!ShowMeter", "MeterCPUSub")
+      else SKIN:Bang("!HideMeter", "MeterCPUSub") end
+    end
     if mod == "GPU" then
       local st = tonumber(SKIN:GetVariable("ShowTemps")) or 1
       if st == 1 then
@@ -168,15 +173,13 @@ function ApplyLayout()
         local prefix = (wMode == 1) and "WH" or "WD"
         for r = 0, wRows - 1 do
           local ry = padY + (curY + 64 + r * 15) * scale
-          local vL = SKIN:GetVariable(prefix .. r .. "L") or ""
-          local vM = SKIN:GetVariable(prefix .. r .. "M") or ""
-          local vR = SKIN:GetVariable(prefix .. r .. "R") or ""
           SKIN:Bang("!SetOption", "MeterWF" .. r .. "L", "Y", tostring(ry))
           SKIN:Bang("!SetOption", "MeterWF" .. r .. "M", "Y", tostring(ry))
           SKIN:Bang("!SetOption", "MeterWF" .. r .. "R", "Y", tostring(ry))
-          SKIN:Bang("!SetOption", "MeterWF" .. r .. "L", "Text", vL)
-          SKIN:Bang("!SetOption", "MeterWF" .. r .. "M", "Text", vM)
-          SKIN:Bang("!SetOption", "MeterWF" .. r .. "R", "Text", vR)
+          -- Pass Rainmeter variable references (#WD0M#) so Rainmeter expands UTF-16 icons directly!
+          SKIN:Bang("!SetOption", "MeterWF" .. r .. "L", "Text", "#" .. prefix .. r .. "L#")
+          SKIN:Bang("!SetOption", "MeterWF" .. r .. "M", "Text", "#" .. prefix .. r .. "M#")
+          SKIN:Bang("!SetOption", "MeterWF" .. r .. "R", "Text", "#" .. prefix .. r .. "R#")
           SKIN:Bang("!ShowMeter", "MeterWF" .. r .. "L")
           SKIN:Bang("!ShowMeter", "MeterWF" .. r .. "M")
           SKIN:Bang("!ShowMeter", "MeterWF" .. r .. "R")
@@ -194,6 +197,187 @@ function ApplyLayout()
       "Rectangle 0,0,0,0 | Fill Color 0,0,0,0 | StrokeWidth 0")
   end
 
+  local cardH = curY + 6
+  local wPx = 240 * scale
+  local hPx = cardH * scale
+  local rad = tonumber(SKIN:GetVariable("Radius")) or 8
+
+  -- Size MeterBg & MeterCard cleanly once (no DynamicVariables needed!)
+  SKIN:Bang("!SetOption", "MeterBg", "Shape",
+    string.format("Rectangle 0,0,%.1f,%.1f,%d | Fill LinearGradient CardGrad | StrokeWidth 0", wPx, hPx, rad))
+  SKIN:Bang("!SetOption", "MeterBg", "Shape2",
+    string.format("Rectangle 0,0,%.1f,%.1f,%d | Fill RadialGradient Glow1 | StrokeWidth 0", wPx, hPx, rad))
+  SKIN:Bang("!SetOption", "MeterBg", "Glow1",
+    string.format("%.1f,%.1f | 0,0 | %.1f,%.1f | #CCPU#,#GlowA# ; 0.0 | #CCPU#,(#GlowA#*0.32) ; 0.42 | #CCPU#,0 ; 0.88 | #CCPU#,0 ; 1.0",
+      wPx * 0.36, hPx * -0.42, 210 * scale, 210 * scale))
+  SKIN:Bang("!SetOption", "MeterBg", "Shape3",
+    string.format("Rectangle 0,0,%.1f,%.1f,%d | Fill RadialGradient Glow2 | StrokeWidth 0", wPx, hPx, rad))
+  SKIN:Bang("!SetOption", "MeterBg", "Glow2",
+    string.format("%.1f,%.1f | 0,0 | %.1f,%.1f | #CGPU#,#GlowA# ; 0.0 | #CGPU#,(#GlowA#*0.32) ; 0.42 | #CGPU#,0 ; 0.88 | #CGPU#,0 ; 1.0",
+      wPx * -0.40, hPx * 0.44, 230 * scale, 230 * scale))
+  SKIN:Bang("!SetOption", "MeterBg", "Shape4",
+    string.format("Rectangle 1,1,%.1f,%.1f,%d | Fill LinearGradient Sheen | StrokeWidth 0", wPx - 2, hPx - 2, rad))
+  SKIN:Bang("!SetOption", "MeterCard", "Shape",
+    string.format("Rectangle 0.5,0.5,%.1f,%.1f,%d | Fill Color 0,0,0,0 | StrokeWidth 1 | Stroke LinearGradient BorderGrad", wPx - 1, hPx - 1, rad))
+  SKIN:Bang("!SetOption", "MeterBottomSpacer", "Y", tostring(math.floor(padY * 2 + hPx - 1)))
+
   SKIN:Bang("!UpdateMeter", "*")
   SKIN:Bang("!Redraw")
+end
+
+-- ApplyLive(): aplica cambios visuales (temas, colores, opacidad, brillo, borde, grilla, relleno, fuentes)
+-- SIN hacer !Refresh, conservando 100% del historial de los graficos!
+function ApplyLive()
+  local bgTop   = SKIN:GetVariable("BgTopRGB") or "13,22,30"
+  local bgBot   = SKIN:GetVariable("BgBotRGB") or "7,13,19"
+  local bgAlpha = SKIN:GetVariable("BgAlpha") or "185"
+  local glowA   = tonumber(SKIN:GetVariable("GlowA")) or 42
+  local cCPU    = SKIN:GetVariable("CCPU") or "64,230,245"
+  local cGPU    = SKIN:GetVariable("CGPU") or "242,92,212"
+  local cRAM    = SKIN:GetVariable("CRAM") or "238,190,98"
+  local cNET    = SKIN:GetVariable("CNET") or "120,202,226"
+  local cDISK   = SKIN:GetVariable("CDISK") or "118,204,136"
+  local cWEATH  = SKIN:GetVariable("CWEATHER") or "189,156,236"
+  local areaA   = SKIN:GetVariable("AreaAlpha") or "54"
+  local bTop    = SKIN:GetVariable("BorderTop") or (cCPU .. ",62")
+  local bMid    = SKIN:GetVariable("BorderMid") or "180,215,235,22"
+  local bBot    = SKIN:GetVariable("BorderBot") or (cGPU .. ",52")
+  local gMaj    = SKIN:GetVariable("GridMajor") or "170,215,235,24"
+  local gMin    = SKIN:GetVariable("GridMinor") or "170,215,235,12"
+  local gBase   = SKIN:GetVariable("GridBase") or "170,215,235,46"
+  local fg      = SKIN:GetVariable("FG") or "236,244,248"
+  local dim     = SKIN:GetVariable("Dim") or "190,215,230,165"
+  local faint   = SKIN:GetVariable("Faint") or "170,202,220,105"
+  local second  = SKIN:GetVariable("Second") or "175,205,225,155"
+  local scale   = tonumber(SKIN:GetVariable("Scale")) or 1
+  local rad     = tonumber(SKIN:GetVariable("Radius")) or 8
+
+  -- Resolve nested #CCPU# / #CGPU# inside BorderTop/BorderBot
+  bTop = bTop:gsub("#CCPU#", cCPU):gsub("#CGPU#", cGPU)
+  bBot = bBot:gsub("#CCPU#", cCPU):gsub("#CGPU#", cGPU)
+
+  -- Background gradients & glow
+  SKIN:Bang("!SetOption", "MeterBg", "CardGrad", string.format("90 | %s,%s ; 0.0 | %s,%s ; 1.0", bgTop, bgAlpha, bgBot, bgAlpha))
+  SKIN:Bang("!SetOption", "MeterCard", "BorderGrad", string.format("135 | %s ; 0.0 | %s ; 0.5 | %s ; 1.0", bTop, bMid, bBot))
+
+  -- Module graph colors & fill (preserves graph history!)
+  SKIN:Bang("!SetOption", "MeterCPUArea",  "PrimaryColor", cCPU .. "," .. areaA)
+  SKIN:Bang("!SetOption", "MeterCPUGraph", "LineColor",    cCPU)
+  SKIN:Bang("!SetOption", "MeterGPUArea",  "PrimaryColor", cGPU .. "," .. areaA)
+  SKIN:Bang("!SetOption", "MeterGPUGraph", "LineColor",    cGPU)
+  SKIN:Bang("!SetOption", "MeterRAMArea",  "PrimaryColor", cRAM .. "," .. areaA)
+  SKIN:Bang("!SetOption", "MeterRAMGraph", "LineColor",    cRAM)
+  SKIN:Bang("!SetOption", "MeterNETAIcon", "FontColor",    cNET)
+  SKIN:Bang("!SetOption", "MeterNETBIcon", "FontColor",    second)
+  SKIN:Bang("!SetOption", "MeterNETGraph", "LineColor",    cNET)
+  SKIN:Bang("!SetOption", "MeterNETGraph", "LineColor2",   second)
+  SKIN:Bang("!SetOption", "MeterDISKAIcon","FontColor",    cDISK)
+  SKIN:Bang("!SetOption", "MeterDISKBIcon","FontColor",    second)
+  SKIN:Bang("!SetOption", "MeterDISKGraph","LineColor",    cDISK)
+  SKIN:Bang("!SetOption", "MeterDISKGraph","LineColor2",   second)
+
+  -- Accent bars & grids for the 5 graph modules
+  local gMods = {
+    { card = "MeterCPUCard",  col = cCPU,  gx = 104, gw = 122 },
+    { card = "MeterGPUCard",  col = cGPU,  gx = 104, gw = 122 },
+    { card = "MeterRAMCard",  col = cRAM,  gx = 104, gw = 122 },
+    { card = "MeterNETCard",  col = cNET,  gx = 132, gw = 94  },
+    { card = "MeterDISKCard", col = cDISK, gx = 132, gw = 94  },
+  }
+  local hYs = {28.0, 33.5, 39.0, 44.5, 50.0}
+  for _, gm in ipairs(gMods) do
+    SKIN:Bang("!SetOption", gm.card, "Shape",
+      string.format("Rectangle %.1f,%.1f,%.1f,%.1f,%.1f | Fill Color %s | StrokeWidth 0",
+        14*scale, 13*scale, 3*scale, 34*scale, 1.5*scale, gm.col))
+    local sIdx = 2
+    for hi, hy in ipairs(hYs) do
+      if hi == 1 or hi == 5 then
+        SKIN:Bang("!SetOption", gm.card, "Shape" .. sIdx,
+          string.format("Line %.1f,%.1f,%.1f,%.1f | StrokeWidth 1 | Stroke Color %s",
+            gm.gx*scale, hy*scale, (gm.gx+gm.gw)*scale, hy*scale, gMaj))
+      else
+        SKIN:Bang("!SetOption", gm.card, "Shape" .. sIdx,
+          string.format("Line %.1f,%.1f,%.1f,%.1f | StrokeWidth 1 | Stroke Color %s | StrokeDashes 1,2",
+            gm.gx*scale, hy*scale, (gm.gx+gm.gw)*scale, hy*scale, gMin))
+      end
+      sIdx = sIdx + 1
+    end
+    for ci = 0, 6 do
+      local vx = gm.gx + gm.gw * (ci / 6.0)
+      if ci == 0 or ci == 6 then
+        SKIN:Bang("!SetOption", gm.card, "Shape" .. sIdx,
+          string.format("Line %.1f,%.1f,%.1f,%.1f | StrokeWidth 1 | Stroke Color %s",
+            vx*scale, 28*scale, vx*scale, 50*scale, gMaj))
+      else
+        SKIN:Bang("!SetOption", gm.card, "Shape" .. sIdx,
+          string.format("Line %.1f,%.1f,%.1f,%.1f | StrokeWidth 1 | Stroke Color %s | StrokeDashes 1,2",
+            vx*scale, 28*scale, vx*scale, 50*scale, gMin))
+      end
+      sIdx = sIdx + 1
+    end
+    SKIN:Bang("!SetOption", gm.card, "Shape" .. sIdx,
+      string.format("Line %.1f,%.1f,%.1f,%.1f | StrokeWidth 1 | Stroke Color %s",
+        gm.gx*scale, 50*scale, (gm.gx+gm.gw)*scale, 50*scale, gBase))
+  end
+
+  -- Text colors & fonts
+  local fHead = SKIN:GetVariable("FontHead") or "Space Ranger Title"
+  local wHead = SKIN:GetVariable("WHead") or "400"
+  local fNum  = SKIN:GetVariable("FontNum") or "Segoe UI Variable Display"
+  local wNum  = SKIN:GetVariable("WNum") or "600"
+  local szNum = tonumber(SKIN:GetVariable("SzNum")) or 1
+  local fTxt  = SKIN:GetVariable("FontText") or "Segoe UI Variable Text"
+  local wTxt  = SKIN:GetVariable("WText") or "600"
+  local szTxt = tonumber(SKIN:GetVariable("SzText")) or 1
+
+  SKIN:Bang("!SetOption", "MeterHost", "FontFace", fHead)
+  SKIN:Bang("!SetOption", "MeterHost", "FontWeight", wHead)
+  SKIN:Bang("!SetOption", "MeterHost", "FontColor", fg)
+  SKIN:Bang("!SetOption", "MeterUptime", "FontFace", fTxt)
+  SKIN:Bang("!SetOption", "MeterUptime", "FontColor", faint)
+  SKIN:Bang("!SetOption", "MeterGear", "FontColor", faint)
+
+  for _, m in ipairs({"MeterCPUTitle","MeterGPUTitle","MeterRAMTitle","MeterNETTitle","MeterDISKTitle","MeterWEATHERTitle"}) do
+    SKIN:Bang("!SetOption", m, "FontFace", fNum)
+    SKIN:Bang("!SetOption", m, "FontWeight", wNum)
+    SKIN:Bang("!SetOption", m, "FontSize", tostring(7.5*scale*szNum))
+    SKIN:Bang("!SetOption", m, "FontColor", dim)
+  end
+  for _, m in ipairs({"MeterCPUSub","MeterGPUSub","MeterGPUSubNoTemp","MeterRAMSub","MeterNETSub","MeterDISKSub","MeterWEATHERSub"}) do
+    SKIN:Bang("!SetOption", m, "FontFace", fTxt)
+    SKIN:Bang("!SetOption", m, "FontWeight", wTxt)
+    SKIN:Bang("!SetOption", m, "FontSize", tostring(7.5*scale*szTxt))
+    SKIN:Bang("!SetOption", m, "FontColor", faint)
+  end
+  for _, m in ipairs({"MeterCPUValue","MeterGPUValue","MeterRAMValue","MeterWEATHERValue"}) do
+    SKIN:Bang("!SetOption", m, "FontFace", fNum)
+    SKIN:Bang("!SetOption", m, "FontWeight", wNum)
+    SKIN:Bang("!SetOption", m, "FontSize", tostring(19*scale*szNum))
+    SKIN:Bang("!SetOption", m, "FontColor", fg)
+  end
+  for _, m in ipairs({"MeterCPUUnit","MeterGPUUnit","MeterRAMUnit","MeterWEATHERUnit"}) do
+    SKIN:Bang("!SetOption", m, "FontFace", fTxt)
+    SKIN:Bang("!SetOption", m, "FontWeight", wTxt)
+    SKIN:Bang("!SetOption", m, "FontSize", tostring(9.5*scale*szTxt))
+    SKIN:Bang("!SetOption", m, "FontColor", dim)
+  end
+  for _, m in ipairs({"MeterNETAValue","MeterNETBValue","MeterDISKAValue","MeterDISKBValue"}) do
+    SKIN:Bang("!SetOption", m, "FontFace", fNum)
+    SKIN:Bang("!SetOption", m, "FontWeight", wNum)
+    SKIN:Bang("!SetOption", m, "FontSize", tostring(11.5*scale*szNum))
+    SKIN:Bang("!SetOption", m, "FontColor", fg)
+  end
+  for _, m in ipairs({"MeterNETAUnit","MeterNETBUnit","MeterDISKAUnit","MeterDISKBUnit"}) do
+    SKIN:Bang("!SetOption", m, "FontFace", fTxt)
+    SKIN:Bang("!SetOption", m, "FontWeight", wTxt)
+    SKIN:Bang("!SetOption", m, "FontSize", tostring(7.5*scale*szTxt))
+    SKIN:Bang("!SetOption", m, "FontColor", dim)
+  end
+  SKIN:Bang("!SetOption", "MeterWEATHERCond", "FontFace", fTxt)
+  SKIN:Bang("!SetOption", "MeterWEATHERCond", "FontColor", fg)
+  SKIN:Bang("!SetOption", "MeterWEATHERDetails", "FontFace", fTxt)
+  SKIN:Bang("!SetOption", "MeterWEATHERDetails", "FontColor", dim)
+
+  -- Re-apply layout (sizes, glows, radius, weather bar, visibility) without !Refresh!
+  ApplyLayout()
 end

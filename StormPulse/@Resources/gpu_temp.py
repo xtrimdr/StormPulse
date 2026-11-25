@@ -1,5 +1,6 @@
 import ctypes
 import subprocess
+import sys
 from ctypes import c_int, c_void_p, POINTER, Structure, byref
 
 def get_amd_gpu_temp():
@@ -63,4 +64,4 @@ def get_nvidia_gpu_temp():
 
 if __name__ == "__main__":
     t = get_amd_gpu_temp() or get_nvidia_gpu_temp()
-    print(t if t is not None else "--")
+    sys.stdout.write(t if t is not None else "--")

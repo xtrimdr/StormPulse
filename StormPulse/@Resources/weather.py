@@ -74,6 +74,44 @@ WMO_SHORT = {
     99: "Tormenta",
 }
 
+WMO_ICON = {
+    0: "☀",
+    1: "🌤",
+    2: "⛅",
+    3: "☁",
+    45: "🌫",
+    48: "🌫",
+    51: "🌦",
+    53: "🌦",
+    55: "🌧",
+    56: "🌧",
+    57: "🌧",
+    61: "🌦",
+    63: "🌧",
+    65: "🌧",
+    66: "🌧",
+    67: "🌧",
+    71: "❄",
+    73: "❄",
+    75: "❄",
+    77: "❄",
+    80: "🌦",
+    81: "🌧",
+    82: "🌧",
+    85: "❄",
+    86: "❄",
+    95: "⛈",
+    96: "⛈",
+    99: "⛈",
+}
+
+def wmo_icon(code, is_day=1):
+    if code == 0 and is_day == 0:
+        return "🌙"
+    if code in (1, 2) and is_day == 0:
+        return "☁"
+    return WMO_ICON.get(code, "☀")
+
 DAYS_ES = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"]
 
 def read_vars():
@@ -134,8 +172,8 @@ def write_forecast_inc(hourly_rows, daily_rows):
 def fetch_weather(lat, lon, label, unit="C"):
     url = (
         f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}"
-        "&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m"
-        "&hourly=temperature_2m,weather_code"
+        "&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,is_day"
+        "&hourly=temperature_2m,weather_code,is_day"
         "&daily=weather_code,temperature_2m_max,temperature_2m_min"
         "&forecast_days=10&timezone=auto"
     )
@@ -143,18 +181,21 @@ def fetch_weather(lat, lon, label, unit="C"):
         j = http_json(url)
         cur = j.get("current", {})
         cur_time = cur.get("time", "")
+        is_day = int(cur.get("is_day", 1))
         temp = fmt_temp(cur.get("temperature_2m", 0), unit)
         feels = fmt_temp(cur.get("apparent_temperature", cur.get("temperature_2m", 0)), unit)
         hum = round(cur.get("relative_humidity_2m", 0))
         wind = round(cur.get("wind_speed_10m", 0))
         code = int(cur.get("weather_code", 0))
-        cond = WMO_ES.get(code, "Despejado")
+        icon = wmo_icon(code, is_day)
+        cond = f"{icon} {WMO_ES.get(code, 'Despejado')}"
 
         # Build next 10 hourly rows starting from the next hour after current time
         hourly = j.get("hourly", {})
         h_times = hourly.get("time", [])
         h_temps = hourly.get("temperature_2m", [])
         h_codes = hourly.get("weather_code", [])
+        h_isday = hourly.get("is_day", [1] * len(h_times))
         start_idx = 0
         if cur_time:
             cur_prefix = cur_time[:13]  # YYYY-MM-DDTHH
@@ -165,7 +206,9 @@ def fetch_weather(lat, lon, label, unit="C"):
         hourly_rows = []
         for idx in range(start_idx, min(start_idx + 10, len(h_times))):
             hh = h_times[idx][11:16]
-            hc = WMO_SHORT.get(int(h_codes[idx]), "Despejado")
+            hcode = int(h_codes[idx])
+            hd = int(h_isday[idx]) if idx < len(h_isday) else 1
+            hc = f"{wmo_icon(hcode, hd)} {WMO_SHORT.get(hcode, 'Despejado')}"
             ht = f"{fmt_temp(h_temps[idx], unit)}°"
             hourly_rows.append((hh, hc, ht))
 
@@ -183,9 +226,10 @@ def fetch_weather(lat, lon, label, unit="C"):
             elif idx == 1:
                 d_lbl = "Mañ"
             else:
-                d_lbl = f"{DAYS_ES[dt.weekday()]} {dt.day}"
-            dc = WMO_SHORT.get(int(d_codes[idx]), "Despejado")
-            dr = f"{fmt_temp(d_min[idx], unit)}° / {fmt_temp(d_max[idx], unit)}°"
+                d_lbl = f"{DAYS_ES[dt.weekday()]} {dt.day:02d}"
+            dcode = int(d_codes[idx])
+            dc = f"{wmo_icon(dcode, 1)} {WMO_SHORT.get(dcode, 'Despejado')}"
+            dr = f"{fmt_temp(d_min[idx], unit):>2}° / {fmt_temp(d_max[idx], unit):>2}°"
             daily_rows.append((d_lbl, dc, dr))
 
         write_forecast_inc(hourly_rows, daily_rows)
